@@ -1,0 +1,103 @@
+{
+  "generated": "2026-11-16T13:50:54+00:00",
+  "preserve_entries": 2843,
+  "lists": [
+    {
+      "file": "aws-ec2.txt",
+      "title": "AWS EC2 (compute) ranges",
+      "entries": 4758,
+      "bytes": 72327,
+      "sha256": "922b5002300205f3b048b5b8a39dd143618b473e94c2623113f1da4031305c96",
+      "ipv4": 4758,
+      "ipv6": 0
+    },
+    {
+      "file": "azure-compute.txt",
+      "title": "Azure compute (AzureCloud) ranges",
+      "entries": 4833,
+      "bytes": 104752,
+      "sha256": "17b5993cd7a884604cc5f95bf571b683609f75d0e303be5c2893be45e2c3bfe0",
+      "ipv4": 2545,
+      "ipv6": 2288
+    },
+    {
+      "file": "gcp-cloud.txt",
+      "title": "Google Cloud customer ranges",
+      "entries": 495,
+      "bytes": 7755,
+      "sha256": "6cbfffcc2ca2ff1ffbabcdc79a09edc52bcee97619f68fcdfff32afccae01822",
+      "ipv4": 467,
+      "ipv6": 28
+    },
+    {
+      "file": "cloud-compute.txt",
+      "title": "Cloud compute (AWS EC2 + Azure + GCP)",
+      "entries": 10086,
+      "bytes": 184834,
+      "sha256": "b7c15cc90a508be1e9fd2693f5e10c17dced42571acb15ff58d589567f52fa23",
+      "ipv4": 7770,
+      "ipv6": 2316
+    },
+    {
+      "file": "commercial-vps-abused.txt",
+      "title": "Commonly abused commercial VPS / reseller ranges",
+      "entries": 12216,
+      "bytes": 210306,
+      "sha256": "6497f02081348028d1f20cd0b0c649e8d953210e5215fb12c06927140cfb94af",
+      "ipv4": 10511,
+      "ipv6": 1705
+    },
+    {
+      "file": "malware-c2-stalkerware.txt",
+      "title": "Malware, C2, stalkerware and known-bad routes",
+      "entries": 224972,
+      "bytes": 3874830,
+      "sha256": "b0dbc23403e5f371740722679cfea0b029da7bc33909a16b01622feb9a36244e",
+      "ipv4": 224759,
+      "ipv6": 213
+    },
+    {
+      "file": "tor-exit-nodes.txt",
+      "title": "Tor exit nodes",
+      "entries": 686,
+      "bytes": 11768,
+      "sha256": "3801de6c1d6c921bd7143f4077da6b73cfbfc62fcf04a785ec9ac281e3af2626",
+      "ipv4": 686,
+      "ipv6": 0
+    },
+    {
+      "file": "open-proxies.txt.gz",
+      "title": "Open proxies / anonymizers (gzip)",
+      "entries": 2594177,
+      "bytes": 8443492,
+      "sha256": "1db79afd2b6d1328d6b2a08588d24b08b439f9c8fae0d179a7c9e1ba19f47039"
+    },
+    {
+      "file": "preserve-enterprise.txt",
+      "title": "CDN / enterprise routes that must stay reachable",
+      "entries": 8729,
+      "bytes": 216496,
+      "sha256": "9de716c2cdddb0704cf3aca33e61e6ce79babaa353e9798c42056864881d4f71",
+      "ipv4": 2514,
+      "ipv6": 6215
+    },
+    {
+      "file": "blocklist-default.txt",
+      "title": "Default blocklist: malware/C2/stalkerware + abused bulk hosts",
+      "entries": 203787,
+      "bytes": 3504979,
+      "sha256": "012fd233bbd2eed6e0f70c160bef314b4ab99f81eff6e2abe3976c11a15fc3f1",
+      "ipv4": 201900,
+      "ipv6": 1887
+    },
+    {
+      "file": "blocklist-egress.txt",
+      "title": "Egress-control list: everything above incl. cloud compute + Tor",
+      "entries": 191680,
+      "bytes": 3317135,
+      "sha256": "0ef34f2b6c4069f7463e651545151ace2e0f1589df135a92393c5024aa012e02",
+      "ipv4": 187479,
+      "ipv6": 4201
+    }
+  ]
+}

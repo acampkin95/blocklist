@@ -1,0 +1,45 @@
+name: Update blocklists
+
+on:
+  schedule:
+    # every 12 hours
+    - cron: "17 */12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-blocklists
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch upstream feeds
+        run: bash scripts/fetch_sources.sh sources
+
+      - name: Build blocklists
+        run: python3 scripts/build_blocklists.py sources lists
+
+      - name: Verify invariants
+        run: python3 scripts/verify_blocklists.py lists
+
+      - name: Commit refreshed lists
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lists
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "chore: refresh blocklists $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
