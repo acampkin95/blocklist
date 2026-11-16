@@ -1,9 +1,9 @@
 # Blocklist
 
 IP blocklists for defensive use: cloud compute space that gets tunnelled
-through, commercial bulk hosts that get abused for the same, malware / C2 /
-stalkerware infrastructure, and the CDN and enterprise routes that must stay
-reachable while all of that is blocked.
+through, commercial bulk hosts abused for the same, malware / C2 / stalkerware
+infrastructure, and the CDN and enterprise routes that must stay reachable
+while all of that is blocked.
 
 Every file under [`lists/`](lists) is **pure CIDR, one prefix per line, no
 comments** — ready to feed straight into `ufw`, `iptables`, `nftables`,
@@ -19,39 +19,49 @@ comments** — ready to feed straight into `ufw`, `iptables`, `nftables`,
 
 | File | Prefixes | What it covers |
 |---|---:|---|
-| [`lists/blocklist-default.txt`](lists/blocklist-default.txt) | 203,787 | Malware / C2 / stalkerware + commonly abused bulk hosts. Safe default. |
-| [`lists/blocklist-egress.txt`](lists/blocklist-egress.txt) | 191,680 | Everything above **plus** cloud compute space and Tor exits. Egress control. |
-| [`lists/aws-ec2.txt`](lists/aws-ec2.txt) | 4,758 | AWS EC2 compute ranges (official `ip-ranges.amazonaws.com`). |
-| [`lists/azure-compute.txt`](lists/azure-compute.txt) | 4,833 | Azure compute space (`AzureCloud` service tag). |
+| [`lists/blocklist-default.txt`](lists/blocklist-default.txt) | 203,740 | Malware / C2 / stalkerware + commonly abused bulk hosts. Safe default. |
+| [`lists/blocklist-egress.txt`](lists/blocklist-egress.txt) | 293,838 | Everything above **plus** cloud compute space and Tor exits. Egress control. |
+| [`lists/aws-ec2.txt`](lists/aws-ec2.txt) | 7,706 | AWS compute space (EC2 + legacy AMAZON tag), IPv4 + IPv6. |
+| [`lists/azure-compute.txt`](lists/azure-compute.txt) | 104,089 | Azure compute space (`AzureCloud` tag + every regional variant). |
 | [`lists/gcp-cloud.txt`](lists/gcp-cloud.txt) | 495 | Google Cloud customer ranges. |
-| [`lists/cloud-compute.txt`](lists/cloud-compute.txt) | 10,086 | AWS EC2 + Azure + GCP merged. |
+| [`lists/cloud-compute.txt`](lists/cloud-compute.txt) | 112,290 | AWS + Azure + GCP merged. |
 | [`lists/commercial-vps-abused.txt`](lists/commercial-vps-abused.txt) | 12,216 | Bulk hosts repeatedly used for tunnelling: Hetzner, OVH, Contabo, LeaseWeb, ColoCrossing, DigitalOcean, Vultr, Linode, Oracle Cloud, Alibaba, Tencent, M247, Datacamp, Psychz, BuyVM, Scaleway. |
-| [`lists/malware-c2-stalkerware.txt`](lists/malware-c2-stalkerware.txt) | 224,972 | Malware hosts, C2, botnet and stalkerware/spyware routes. |
+| [`lists/malware-c2-stalkerware.txt`](lists/malware-c2-stalkerware.txt) | 224,925 | Malware hosts, C2, botnet and stalkerware/spyware routes. |
 | [`lists/tor-exit-nodes.txt`](lists/tor-exit-nodes.txt) | 686 | Current Tor exit nodes. |
-| [`lists/open-proxies.txt.gz`](lists/open-proxies.txt.gz) | 2,594,177 | Open proxies / anonymizers. Gzipped (~8 MB) because it is huge. |
-| [`lists/preserve-enterprise.txt`](lists/preserve-enterprise.txt) | 8,729 | CDN and enterprise routes that are **never** blocked. Reference only. |
+| [`lists/open-proxies.txt.gz`](lists/open-proxies.txt.gz) | 2,594,046 | Open proxies / anonymizers. Gzipped (~8 MB) because it is huge. |
+| [`lists/preserve-enterprise.txt`](lists/preserve-enterprise.txt) | 20,068 | CDN and enterprise routes that are **never** blocked. Reference only. |
 
 [`lists/manifest.json`](lists/manifest.json) carries the entry counts and
 SHA-256 of every generated file.
 
 ## The safeguard rule
 
-Every block category is computed as `category − preserve`. The preserve set
+Every block category is computed as `source − preserve`. The preserve set
 holds the routes registered to large enterprises for common applications and
-non-risky software:
+non-risky software. Each provider is handled on its own terms, because the
+published lists overlap in different ways:
 
-- **Akamai** (AS20940 edge space), **Fastly** (official published list),
-  **Cloudflare** (official `ips-v4` / `ips-v6`)
-- **Google Frontend** (Google's own app-delivery list, `goog.json`)
-- **AWS** CloudFront / S3 / Route53
-- **Azure Front Door**, **Entra ID (Azure Active Directory)**, Microsoft 365
-  app and Defender service tags, Microsoft corporate ASNs
-- **GitHub** (AS36459)
+| Provider | Preserved | Blocked |
+|---|---|---|
+| **Akamai / Fastly / Cloudflare** | Their whole official edge space (AS20940, `api.fastly.com/public-ip-list`, `cloudflare.com/ips`) | — (they are never block targets here) |
+| **AWS** | CloudFront, Global Accelerator and the whole Route 53 family (incl. resolvers) wherever AWS tags them; S3 only where AWS tags it exclusively | EC2 + legacy AMAZON space, and the S3 prefixes that overlap it |
+| **Azure / Microsoft** | Entra ID (Azure Active Directory), Microsoft 365 / Defender / Power BI service tags, Azure Front Door, Microsoft corporate ASNs | `AzureCloud` compute space and every regional variant |
+| **Google** | Google's front-end space minus the Google Cloud customer space (Google publishes one list covering both) | Google Cloud customer ranges |
+| **GitHub** | AS36459 | — |
 
-Because Google Frontend and the Microsoft ASNs both overlap their own cloud
-ranges, the cloud block space is subtracted from the preserve set before it is
-applied — so a CDN route can never be swallowed by a cloud prefix, and a cloud
-prefix can never be hollowed out by a CDN prefix.
+Two consequences worth knowing:
+
+- **AWS tags one prefix with several services.** A prefix can be EC2 *and*
+  S3 at once. CDN and DNS routes are preserved wherever they appear, because
+  they carry ordinary web and mail traffic. S3 is preserved only where AWS
+  tags it exclusively; the overlapping prefixes are compute space and are
+  blocked. Other AWS services (API Gateway, EBS, Workspaces gateways,
+  instance connect) are tunnelling-friendly and stay blocked.
+- **Microsoft publishes no feed that separates Microsoft 365 from Azure
+  compute.** Entra ID, Teams/Front Door and the M365 service tags Microsoft
+  publishes *are* carved out; a few Exchange Online and SharePoint Online
+  subnets still sit inside the `AzureCloud` tag and are therefore blocked by
+  the aggressive Azure list.
 
 `scripts/verify_blocklists.py` asserts these invariants on every build:
 
@@ -60,8 +70,9 @@ python3 scripts/verify_blocklists.py lists
 ```
 
 It fails the build if any preserve range appears inside a block list, if
-Cloudflare / Fastly / Akamai / Google / GitHub / Entra / M365 probes are
-blocked, or if a combined list stops covering one of its parts.
+Cloudflare / Fastly / Akamai / Google / GitHub / Entra / M365 / AWS CDN-DNS
+probes are blocked, if the cloud compute space is not blocked where it should
+be, or if a combined list stops covering one of its parts.
 
 ## Usage
 
@@ -108,9 +119,9 @@ runs the same pipeline every 12 hours and commits the result.
 ### Your own carve-outs
 
 Drop a file at `sources/microsoft365_preserve.txt` (one CIDR per line) and
-it is subtracted from the Azure block set and added to the preserve set. Use
-it for Microsoft 365 ranges your environment depends on, or for your own
-SaaS estate.
+it is subtracted from every block space and added to the preserve set. Use it
+for Microsoft 365 ranges your environment depends on, or for your own SaaS
+estate.
 
 ## Sources
 
@@ -126,10 +137,6 @@ SaaS estate.
 
 ## Caveats
 
-- **Azure compute space contains some Microsoft 365 endpoints.** Microsoft
-  publishes no feed that separates them from tenant compute, so a strict
-  `AzureCloud` block touches some Exchange Online and SharePoint Online
-  space. Use `sources/microsoft365_preserve.txt` to carve them out.
 - **Tor exits and open proxies** are shipped as separate, opt-in files. They
   are legitimate for some users (anonymity, geo-testing) and produce false
   positives if applied blindly.

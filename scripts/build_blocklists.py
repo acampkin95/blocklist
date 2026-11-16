@@ -223,26 +223,44 @@ def read_asn(asn):
 
 
 # ------------------------------------------------------------------ AWS
+# Routing services that are preserved wherever AWS tags them: CDN and DNS.
+AWS_PROTECT_ALL = ("CLOUDFRONT", "CLOUDFRONT_ORIGIN_FACING", "GLOBALACCELERATOR",
+                   "ROUTE53", "ROUTE53_HEALTHCHECKS",
+                   "ROUTE53_HEALTHCHECKS_PUBLISHING", "ROUTE53_RESOLVER")
+# Application services preserved only where AWS tags them exclusively, i.e.
+# where they do NOT overlap the compute space (S3, Route 53).
+AWS_PROTECT_EXCLUSIVE = ("S3",)
+
+
 def build_aws():
+    """AWS compute space (EC2 + the legacy AMAZON service tag) and the
+    routes that must stay reachable.
+
+    AWS tags many prefixes with several services at once: a prefix can be
+    EC2 *and* S3 at the same time. CDN and DNS routes are preserved
+    wherever they appear, because they carry ordinary web and mail traffic.
+    S3 is preserved only where AWS tags it exclusively - the overlapping
+    prefixes are compute space and are blocked. Other AWS services
+    (API Gateway, EBS, Workspaces gateways, instance connect, ...) are
+    tunnelling-friendly and stay blocked.
+    """
     raw = json.loads(read("aws_ip_ranges.json") or "{}")
-    ec2, keep = [], []
+    compute, protect_all, protect_excl = [], [], []
     for key in ("prefixes", "ipv6_prefixes"):
         for pfx in raw.get(key, []):
-            r = to_range(pfx.get("ip_prefix", ""))
+            token = pfx.get("ip_prefix") or pfx.get("ipv6_prefix") or ""
+            r = to_range(token)
             if not r:
                 continue
             service = (pfx.get("service") or "").upper()
-            # AWS publishes the EC2 customer space twice: once under the
-            # current "EC2" service tag and once under the legacy "AMAZON"
-            # tag. Both are compute space, so both are blocked. S3,
-            # CloudFront and Route53 are app-delivery routes and are kept
-            # (and subtracted from the block set below).
             if service in ("EC2", "AMAZON"):
-                ec2.append(r)
-            elif service in ("CLOUDFRONT", "S3", "ROUTE53",
-                             "ROUTE53_HEALTHCHECKS", "ROUTE53_RESOLVER"):
-                keep.append(r)
-    return ec2, keep
+                compute.append(r)
+            elif service in AWS_PROTECT_ALL:
+                protect_all.append(r)
+            elif service in AWS_PROTECT_EXCLUSIVE:
+                protect_excl.append(r)
+    keep = merge(protect_all + subtract(protect_excl, compute))
+    return compute, keep
 
 
 # ---------------------------------------------------------------- Azure
@@ -463,10 +481,10 @@ def write_list(name, ranges, title):
 
 
 def main():
-    aws_ec2, aws_keep = build_aws()
-    az_block, az_keep = build_azure()
-    gcp_block = build_gcp()
-    goog_keep = build_goog()
+    aws_raw, aws_keep = build_aws()
+    az_raw, az_keep = build_azure()
+    gcp_raw = build_gcp()
+    goog_all = build_goog()
     cdn_keep = build_cdn_keeps()
     abused = build_abused_vps()
     malware = build_malware()
@@ -474,28 +492,32 @@ def main():
     proxies = build_proxies()
 
     # Microsoft ASN space (AS8075 ...) also carries the Azure compute space,
-    # so Azure ranges are removed from it: what is left is Office 365 / Entra
-    # and other non-Azure Microsoft routes we want to keep reachable.
+    # so the raw Azure space is removed from it: what is left is Office 365 /
+    # Entra and other non-Azure Microsoft routes we want to keep reachable.
     microsoft_asn = []
     for asn in ("AS8075", "AS8068", "AS8069", "AS35908"):
         microsoft_asn += read_asn(asn)
-    microsoft_keep = subtract(microsoft_asn, az_block)
+    microsoft_keep = subtract(microsoft_asn, az_raw)
+
+    # Google's published front-end list covers Google's WHOLE public space,
+    # including the Google Cloud customer space, so only the part of it that
+    # is NOT cloud space can be protected.
+    goog_keep = subtract(goog_all, gcp_raw)
 
     # An optional locally supplied carve-out (Microsoft 365 IP ranges, your
-    # own SaaS routes) is honoured as well: it is removed from the Azure
-    # block set and added to the preserve set.
+    # own SaaS routes) is honoured as well: it is removed from the block
+    # spaces and added to the preserve set.
     local_carveout = build_local_carveout()
 
-    # The preserve set must never eat into the cloud compute space we are
-    # deliberately blocking: Google Frontend and the Microsoft ASNs both
-    # overlap their cloud ranges, so the cloud block space is removed from
-    # the preserve set before it is used.
-    cloud_block = merge(aws_ec2 + az_block + gcp_block)
+    # The preserve set: CDN and enterprise routes that must stay reachable.
     preserve = merge(aws_keep + az_keep + goog_keep + cdn_keep + microsoft_keep
                      + local_carveout)
-    preserve = subtract(preserve, cloud_block)
-    aws_ec2 = subtract(aws_ec2, aws_keep)
-    az_block = subtract(az_block, local_carveout)
+
+    # Every block space is the raw provider space minus the preserve set, so
+    # a preserved route can never be blackholed by a cloud prefix.
+    aws_ec2 = subtract(aws_raw, preserve)
+    az_block = subtract(az_raw, preserve)
+    gcp_block = subtract(gcp_raw, preserve)
 
     categories = [
         ("aws-ec2.txt", "AWS EC2 (compute) ranges", aws_ec2),

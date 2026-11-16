@@ -174,6 +174,64 @@ if "cloud-compute.txt" in sets and "blocklist-egress.txt" in sets:
     else:
         print("ok    egress covers every cloud-compute prefix")
 
+# 5. the cloud compute space must actually be blocked where intended
+MUST_BLOCK = [
+    ("AWS EC2", "3.5.140.0/22", ["aws-ec2.txt", "cloud-compute.txt", "blocklist-egress.txt"]),
+    ("GCP customer", "34.80.0.0/15", ["gcp-cloud.txt", "cloud-compute.txt", "blocklist-egress.txt"]),
+    ("Azure compute", "20.36.64.0/19", ["azure-compute.txt", "cloud-compute.txt", "blocklist-egress.txt"]),
+]
+print()
+for label, cidr, expect_in in MUST_BLOCK:
+    net = ipaddress.ip_network(cidr)
+    where = [name for name, (_, rs) in sets.items() if rs.covers(net)]
+    missing = [name for name in expect_in if name not in where]
+    if missing:
+        FAIL += 1
+        print("FAIL  %-14s %-18s NOT blocked in: %s" % (label, cidr, ", ".join(missing)))
+    else:
+        print("ok    %-14s %-18s blocked in: %s" % (label, cidr, ", ".join(where)))
+
+# 6. AWS CDN and DNS routes must be preserved (data-driven, from the
+#    official AWS ip-ranges file the build consumed).
+AWS_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "sources", "aws_ip_ranges.json")
+if os.path.exists(AWS_SRC):
+    import json as _json
+    aws = _json.load(open(AWS_SRC))
+    bysvc = {}
+    for key in ("prefixes", "ipv6_prefixes"):
+        for pfx in aws.get(key, []):
+            token = pfx.get("ip_prefix") or pfx.get("ipv6_prefix") or ""
+            bysvc.setdefault((pfx.get("service") or "").upper(), set()).add(token)
+    compute = bysvc.get("EC2", set()) | bysvc.get("AMAZON", set())
+    def overlaps_compute(token):
+        net = ipaddress.ip_network(token)
+        for c in compute:
+            cn = ipaddress.ip_network(c)
+            if cn.version == net.version and cn.overlaps(net):
+                return True
+        return False
+    samples = []
+    for svc in ("CLOUDFRONT", "GLOBALACCELERATOR", "ROUTE53_RESOLVER"):
+        if bysvc.get(svc):
+            samples.append((svc, sorted(bysvc[svc])[0]))
+    # S3 is preserved only where AWS tags it exclusively.
+    exclusive_s3 = [t for t in sorted(bysvc.get("S3", set())) if not overlaps_compute(t)]
+    if exclusive_s3:
+        samples.append(("S3 (exclusive)", exclusive_s3[0]))
+    for svc, token in samples:
+        net = ipaddress.ip_network(token)
+        in_preserve = preserve.covers(net)
+        blocked_by = [name for name, (_, rs) in sets.items() if rs.covers(net)]
+        if not in_preserve or blocked_by:
+            FAIL += 1
+            print("FAIL  AWS %-18s %-20s preserved=%s blocked_by=%s"
+                  % (svc, token, in_preserve, ", ".join(blocked_by)))
+        else:
+            print("ok    AWS %-18s %-20s preserved and not blocked" % (svc, token))
+else:
+    print("note  AWS source file not available - skipping AWS preserve check")
+
 print()
 print("RESULT: %s" % ("PASS - all invariants hold" if FAIL == 0
                       else "%d CHECK(S) FAILED" % FAIL))
